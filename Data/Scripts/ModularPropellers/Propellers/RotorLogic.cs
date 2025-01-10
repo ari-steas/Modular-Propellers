@@ -16,13 +16,28 @@ namespace ModularPropellers.Propellers
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Thrust), false, "ModularPropellerRotorLarge", "ModularPropellerRotorSmall")]
     internal partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
     {
+        public static readonly Dictionary<string, RotorInfo> RotorInfos = new Dictionary<string, RotorInfo>
+        {
+            ["ModularPropellerRotorLarge"] = new RotorInfo
+            {
+                MaxRpm = 500,
+                MaxTorque = float.MaxValue
+            },
+            ["ModularPropellerRotorSmall"] = new RotorInfo
+            {
+                MaxRpm = 500,
+                MaxTorque = float.MaxValue
+            },
+        };
+
         private IMyThrust _block;
         private IMyCubeGrid _grid => _block.CubeGrid;
+        private RotorInfo _info;
         private List<HashSet<IMyCubeBlock>> _bladeSets = new List<HashSet<IMyCubeBlock>>();
 
         public bool IsValid = true;
 
-        internal MySync<float, SyncDirection.BothWays> BladeAngle;
+        internal MySync<float, SyncDirection.BothWays> BladeAngle, MaxRpm;
         internal MySync<float, SyncDirection.FromServer> RPM;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -30,6 +45,7 @@ namespace ModularPropellers.Propellers
             base.Init(objectBuilder);
             _block = (IMyThrust) Entity;
 
+            _info = RotorInfos[_block.BlockDefinition.SubtypeName];
             NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
@@ -42,7 +58,9 @@ namespace ModularPropellers.Propellers
 
             BladeAngle.Value = (float) Math.PI/4;
             RPM.Value = 0f;
+            MaxRpm.Value = _info.MaxRpm;
 
+            RotorControls.DoOnce();
             NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
 
@@ -52,9 +70,8 @@ namespace ModularPropellers.Propellers
                 return;
             MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
-            float maxRpm = 500;
-            _block.ThrustMultiplier = (float) CalculateThrust(maxRpm, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
-            RPM.Value = maxRpm * MathHelper.Lerp(RPM.Value/maxRpm, _block.CurrentThrustPercentage, 0.02f);
+            _block.ThrustMultiplier = (float) CalculateThrust(MaxRpm, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
+            RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm, _block.CurrentThrustPercentage, 0.02f);
 
             if (float.IsNaN(RPM.Value) || float.IsInfinity(RPM.Value))
                 RPM.Value = 0;
@@ -99,23 +116,15 @@ namespace ModularPropellers.Propellers
             return totalLift.Length();
         }
 
-        Vector3D WorldToLocal(Vector3D pos, MatrixD parentMatrix)
-        {
-            MatrixD inv = MatrixD.Invert(parentMatrix);
-            return Vector3D.Rotate(pos - parentMatrix.Translation, inv);
-        }
-        Vector3D WorldToLocalRotation(Vector3D pos, MatrixD parentMatrix)
-        {
-            MatrixD inv = MatrixD.Invert(parentMatrix);
-            return Vector3D.Rotate(pos, inv);
-        }
-        Vector3D LocalToWorld(Vector3D pos, MatrixD parentMatrix)
-        {
-            return Vector3D.Rotate(pos, parentMatrix) + parentMatrix.Translation;
-        }
         Vector3D LocalToWorldRotation(Vector3D pos, MatrixD parentMatrix)
         {
             return Vector3D.Rotate(pos, parentMatrix);
+        }
+
+        public struct RotorInfo
+        {
+            public float MaxRpm;
+            public float MaxTorque;
         }
     }
 }
