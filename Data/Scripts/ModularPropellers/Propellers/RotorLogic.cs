@@ -17,6 +17,7 @@ namespace ModularPropellers.Propellers
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Thrust), false, "ModularPropellerRotorLarge", "ModularPropellerRotorSmall")]
     internal partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
     {
+        public const float EfficiencyModifier = 5;
         public static readonly Dictionary<string, RotorInfo> RotorInfos = new Dictionary<string, RotorInfo>
         {
             ["ModularPropellerRotorLarge"] = new RotorInfo
@@ -76,50 +77,60 @@ namespace ModularPropellers.Propellers
             if (float.IsNaN(RPM.Value) || float.IsInfinity(RPM.Value))
                 RPM.Value = 0;
 
-            _block.ThrustMultiplier = (float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
-
             MyAPIGateway.Utilities.ShowNotification($"RPM: {RPM.Value:N0}", 1000/60);
             foreach (var bladePair in _bladeParts)
                 bladePair.Value.Update((float) (RPM * Math.PI / 1800), BladeAngle);
 
-            //BladeAngle.Value += _amt;
-            //if (BladeAngle > Math.PI / 4 || BladeAngle < 0)
-            //    _amt *= -1;
+            _block.ThrustMultiplier = (float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
+            DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
         }
 
         internal double CalculateThrust(double rpm, double airDensity)
         {
             Vector3D totalLift = Vector3D.Zero;
+            float propArea = _block.CubeGrid.GridSize * _block.CubeGrid.GridSize;
             foreach (var part in _bladeParts.Values)
             {
                 double propSpeedLocal = (rpm * Math.PI / 30) * Vector3D.Distance(part.PositionComp.GetPosition(), _block.GetPosition());
                 Vector3D propSpeedDirection = Vector3D.Rotate(Vector3D.Left, MatrixD.CreateFromAxisAngle(Vector3D.Forward, -BladeAngle));
                 var globalVelocity = _grid.LinearVelocity + LocalToWorldRotation(propSpeedDirection * propSpeedLocal, part.PositionComp.WorldMatrixRef);
                 double speedSq = globalVelocity.LengthSquared();
-                if (speedSq == 0)
+                if (speedSq <= 1)
                     continue;
 
                 Vector3D dragNormal = -Vector3D.Normalize(globalVelocity);
-
                 Vector3D liftNormal = LocalToWorldRotation(Vector3D.Up, part.PositionComp.WorldMatrixRef);
 
                 // angle between chord line and airflow
-                double angleOfAttack = -Math.Asin(Vector3D.Dot(dragNormal, liftNormal));
-                double liftCoefficient =
-                    1.35 * Math.Sin(5.75 * angleOfAttack); // Approximation of NACA 0012 airfoil
+                double angleOfAttack = Math.Asin(Vector3D.Dot(dragNormal, liftNormal));
 
-                double dynamicUnitPressure = 0.5 * speedSq * airDensity;
+                // Approximation of NACA 0012 airfoil, adjusted so that maximum lift is given at a 45-degree angle of attack.
+                double liftCoefficient = 1.34951 * Math.Sin(2 * angleOfAttack);
+                double dragCoefficient = 0.616947838 * angleOfAttack;
+                dragCoefficient = dragCoefficient * dragCoefficient * dragCoefficient * dragCoefficient + 0.00608945;
 
-                double liftForce = liftCoefficient * dynamicUnitPressure;
-                totalLift += liftNormal * liftForce;
+                // induced drag, increases with lift
+                double inducedDragCoefficient = liftCoefficient * liftCoefficient / Math.PI;
+                dragCoefficient += inducedDragCoefficient;
 
-                DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + liftNormal * liftForce / 1000, Color.Green);
-                DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + globalVelocity, Color.Blue);
+                double dynamicPressure = 0.5 * speedSq * airDensity * propArea * EfficiencyModifier;
+
+                Vector3D totalForce = (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
+                totalLift += totalForce;
+
+                //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
+                //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + dragNormal, Color.Red);
             }
 
-            DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + totalLift/1000, Color.Green);
+            totalLift = WorldToLocalRotation(totalLift, _block.WorldMatrix);
 
-            return totalLift.Length();
+            return totalLift.Z < 0 ? 0 : totalLift.Z;
+        }
+
+        Vector3D WorldToLocalRotation(Vector3D pos, MatrixD parentMatrix)
+        {
+            parentMatrix = MatrixD.Invert(parentMatrix);
+            return Vector3D.Rotate(pos, parentMatrix);
         }
 
         Vector3D LocalToWorldRotation(Vector3D pos, MatrixD parentMatrix)
