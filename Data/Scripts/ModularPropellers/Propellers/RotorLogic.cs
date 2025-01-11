@@ -17,7 +17,7 @@ namespace ModularPropellers.Propellers
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Thrust), false, "ModularPropellerRotorLarge", "ModularPropellerRotorSmall")]
     internal partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
     {
-        public const float EfficiencyModifier = 5;
+        public const float EfficiencyModifier = 5f;
         public static readonly Dictionary<string, RotorInfo> RotorInfos = new Dictionary<string, RotorInfo>
         {
             ["ModularPropellerRotorLarge"] = new RotorInfo
@@ -70,9 +70,11 @@ namespace ModularPropellers.Propellers
         {
             if (!IsValid)
                 return;
-            MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
+            //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
             RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
+            if (RPM.Value == 0)
+                return;
 
             if (float.IsNaN(RPM.Value) || float.IsInfinity(RPM.Value))
                 RPM.Value = 0;
@@ -81,13 +83,17 @@ namespace ModularPropellers.Propellers
             foreach (var bladePair in _bladeParts)
                 bladePair.Value.Update((float) (RPM * Math.PI / 1800), BladeAngle);
 
-            _block.ThrustMultiplier = (float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
+            double torqueNeeded;
+            _block.ThrustMultiplier = MathHelper.Clamp((float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded) / 100f, 1, float.MaxValue);
+
+            MyAPIGateway.Utilities.ShowNotification($"Power: {(torqueNeeded * 2 * Math.PI * RPM / 60)/1000000:F1}mW", 1000/60);
             DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
         }
 
-        internal double CalculateThrust(double rpm, double airDensity)
+        internal double CalculateThrust(double rpm, double airDensity, out double torqueNeeded)
         {
-            Vector3D totalLift = Vector3D.Zero;
+            Vector3D totalForce = Vector3D.Zero;
+            torqueNeeded = 0;
             float propArea = _block.CubeGrid.GridSize * _block.CubeGrid.GridSize;
             foreach (var part in _bladeParts.Values)
             {
@@ -115,16 +121,16 @@ namespace ModularPropellers.Propellers
 
                 double dynamicPressure = 0.5 * speedSq * airDensity * propArea * EfficiencyModifier;
 
-                Vector3D totalForce = (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
-                totalLift += totalForce;
+                totalForce += (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
+                torqueNeeded += dragCoefficient * dynamicPressure * Vector3D.Distance(part.PositionComp.GetPosition(), _block.GetPosition()); // Newtons * Meters
 
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + dragNormal, Color.Red);
             }
 
-            totalLift = WorldToLocalRotation(totalLift, _block.WorldMatrix);
-
-            return totalLift.Z < 0 ? 0 : totalLift.Z;
+            // We only care about the force that's aligned to the thruster direction.
+            totalForce = WorldToLocalRotation(totalForce, _block.WorldMatrix);
+            return totalForce.Z < 0 ? 0 : totalForce.Z;
         }
 
         Vector3D WorldToLocalRotation(Vector3D pos, MatrixD parentMatrix)
