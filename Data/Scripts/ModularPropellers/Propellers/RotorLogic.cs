@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Orrery.HeartModule.Shared.Utility;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
 using VRage.Game.Components;
@@ -70,14 +71,16 @@ namespace ModularPropellers.Propellers
                 return;
             MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
-            _block.ThrustMultiplier = (float) CalculateThrust(MaxRpm, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
-            RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm, _block.CurrentThrustPercentage, 0.02f);
+            RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
 
             if (float.IsNaN(RPM.Value) || float.IsInfinity(RPM.Value))
                 RPM.Value = 0;
 
+            _block.ThrustMultiplier = (float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid)) / 100f;
+
+            MyAPIGateway.Utilities.ShowNotification($"RPM: {RPM.Value:N0}", 1000/60);
             foreach (var bladePair in _bladeParts)
-                bladePair.Value.Update(RPM/360, BladeAngle);
+                bladePair.Value.Update((float) (RPM * Math.PI / 1800), BladeAngle);
 
             //BladeAngle.Value += _amt;
             //if (BladeAngle > Math.PI / 4 || BladeAngle < 0)
@@ -109,9 +112,12 @@ namespace ModularPropellers.Propellers
 
                 double liftForce = liftCoefficient * dynamicUnitPressure;
                 totalLift += liftNormal * liftForce;
+
+                DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + liftNormal * liftForce / 1000, Color.Green);
+                DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + globalVelocity, Color.Blue);
             }
 
-            //DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + totalLift/1000, Color.Green);
+            DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + totalLift/1000, Color.Green);
 
             return totalLift.Length();
         }
