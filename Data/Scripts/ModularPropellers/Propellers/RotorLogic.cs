@@ -17,24 +17,35 @@ namespace ModularPropellers.Propellers
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Thrust), false, "ModularPropellerRotorLarge", "ModularPropellerRotorSmall")]
     internal partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
     {
-        public const float EfficiencyModifier = 5f;
+        /// <summary>
+        /// Lift and drag are multiplied by this number.
+        /// </summary>
+        public const float LiftModifier = 3f;
+        /// <summary>
+        /// Torque requirement is multiplied by this number.
+        /// </summary>
+        public const float TorqueModifier = 1 / 3f;
+
+
         public static readonly Dictionary<string, RotorInfo> RotorInfos = new Dictionary<string, RotorInfo>
         {
             ["ModularPropellerRotorLarge"] = new RotorInfo
             {
                 MaxRpm = 500,
+                MaxAngle = (float) MathHelper.ToRadians(15.5),
                 MaxTorque = float.MaxValue
             },
             ["ModularPropellerRotorSmall"] = new RotorInfo
             {
                 MaxRpm = 500,
+                MaxAngle = (float) MathHelper.ToRadians(15.5),
                 MaxTorque = float.MaxValue
             },
         };
 
         private IMyThrust _block;
         private IMyCubeGrid _grid => _block.CubeGrid;
-        private RotorInfo _info;
+        public RotorInfo Info;
         private List<HashSet<IMyCubeBlock>> _bladeSets = new List<HashSet<IMyCubeBlock>>();
 
         public bool IsValid = true;
@@ -47,7 +58,7 @@ namespace ModularPropellers.Propellers
             base.Init(objectBuilder);
             _block = (IMyThrust) Entity;
 
-            _info = RotorInfos[_block.BlockDefinition.SubtypeName];
+            Info = RotorInfos[_block.BlockDefinition.SubtypeName];
             NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
@@ -58,9 +69,9 @@ namespace ModularPropellers.Propellers
             if(_block?.CubeGrid?.Physics == null)
                 return;
 
-            BladeAngle.Value = (float) Math.PI/4;
+            BladeAngle.Value = Info.MaxAngle;
             RPM.Value = 0f;
-            MaxRpm.Value = _info.MaxRpm;
+            MaxRpm.Value = Info.MaxRpm;
 
             RotorControls.DoOnce();
             NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
@@ -70,24 +81,43 @@ namespace ModularPropellers.Propellers
         {
             if (!IsValid)
                 return;
+            double availablePower = 2.5 * 1000000 * _block.CurrentThrustPercentage;
+
             //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
-            RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
-            if (RPM.Value == 0)
-                return;
+            //if (MyAPIGateway.Session.IsServer)
+            //    RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
+            //if (RPM.Value == 0)
+            //    return;
 
             if (float.IsNaN(RPM.Value) || float.IsInfinity(RPM.Value))
                 RPM.Value = 0;
 
-            MyAPIGateway.Utilities.ShowNotification($"RPM: {RPM.Value:N0}", 1000/60);
             foreach (var bladePair in _bladeParts)
                 bladePair.Value.Update((float) (RPM * Math.PI / 1800), BladeAngle);
 
-            double torqueNeeded;
+            double torqueNeeded; // Newton-Meters
+            // If the thrust multiplier hits zero, it sometimes breaks.
             _block.ThrustMultiplier = MathHelper.Clamp((float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded) / 100f, 1, float.MaxValue);
+            double powerNeeded = torqueNeeded * 2 * Math.PI * RPM / 60; // Watts
+            double netPower = availablePower - powerNeeded;
 
-            MyAPIGateway.Utilities.ShowNotification($"Power: {(torqueNeeded * 2 * Math.PI * RPM / 60)/1000000:F1}mW", 1000/60);
-            DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
+            if (MyAPIGateway.Session.IsServer)
+            {
+                var newRpm = RPM.Value + (float) ((60 * netPower) / (torqueNeeded * 2 * Math.PI)) / 60f;
+                if (newRpm < 0 || float.IsNaN(newRpm))
+                    newRpm = 0;
+                if (newRpm > MaxRpm.Value)
+                    newRpm = MaxRpm.Value;
+                RPM.Value = newRpm;
+            }
+
+            if (!_block.IsWorking)
+                return;
+
+            MyAPIGateway.Utilities.ShowNotification($"RPM: {RPM.Value:N0}", 1000/60);
+            MyAPIGateway.Utilities.ShowNotification($"Power: {powerNeeded/1000000:F1}MW ({100*powerNeeded/availablePower:N0}%)", 1000/60);
+            //DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
         }
 
         internal double CalculateThrust(double rpm, double airDensity, out double torqueNeeded)
@@ -97,7 +127,9 @@ namespace ModularPropellers.Propellers
             float propArea = _block.CubeGrid.GridSize * _block.CubeGrid.GridSize;
             foreach (var part in _bladeParts.Values)
             {
-                double propSpeedLocal = (rpm * Math.PI / 30) * Vector3D.Distance(part.PositionComp.GetPosition(), _block.GetPosition());
+                double propDistanceFromCenter =
+                    Vector3D.Distance(part.PositionComp.GetPosition(), _block.GetPosition());
+                double propSpeedLocal = (rpm * Math.PI / 30) * propDistanceFromCenter;
                 Vector3D propSpeedDirection = Vector3D.Rotate(Vector3D.Left, MatrixD.CreateFromAxisAngle(Vector3D.Forward, -BladeAngle));
                 var globalVelocity = _grid.LinearVelocity + LocalToWorldRotation(propSpeedDirection * propSpeedLocal, part.PositionComp.WorldMatrixRef);
                 double speedSq = globalVelocity.LengthSquared();
@@ -110,19 +142,19 @@ namespace ModularPropellers.Propellers
                 // angle between chord line and airflow
                 double angleOfAttack = Math.Asin(Vector3D.Dot(dragNormal, liftNormal));
 
-                // Approximation of NACA 0012 airfoil, adjusted so that maximum lift is given at a 45-degree angle of attack.
-                double liftCoefficient = 1.34951 * Math.Sin(2 * angleOfAttack);
-                double dragCoefficient = 0.616947838 * angleOfAttack;
+                // Approximation of NACA 0012 airfoil. Maximum lift is achieved around 15.65 degrees.
+                double liftCoefficient = 1.34951 * Math.Sin(5.75 * angleOfAttack);
+                double dragCoefficient = 1.77372503 * angleOfAttack;
                 dragCoefficient = dragCoefficient * dragCoefficient * dragCoefficient * dragCoefficient + 0.00608945;
 
                 // induced drag, increases with lift
                 double inducedDragCoefficient = liftCoefficient * liftCoefficient / Math.PI;
                 dragCoefficient += inducedDragCoefficient;
 
-                double dynamicPressure = 0.5 * speedSq * airDensity * propArea * EfficiencyModifier;
+                double dynamicPressure = 0.5 * speedSq * airDensity * propArea * LiftModifier;
 
                 totalForce += (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
-                torqueNeeded += dragCoefficient * dynamicPressure * Vector3D.Distance(part.PositionComp.GetPosition(), _block.GetPosition()); // Newtons * Meters
+                torqueNeeded += dragCoefficient * dynamicPressure * propDistanceFromCenter * TorqueModifier; // Newtons * Meters
 
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + dragNormal, Color.Red);
@@ -146,7 +178,17 @@ namespace ModularPropellers.Propellers
 
         public struct RotorInfo
         {
+            /// <summary>
+            /// Highest RPM this rotor can achieve.
+            /// </summary>
             public float MaxRpm;
+            /// <summary>
+            /// Highest propeller angle for this rotor.
+            /// </summary>
+            public float MaxAngle;
+            /// <summary>
+            /// Highest safe torque for this rotor.
+            /// </summary>
             public float MaxTorque;
         }
     }

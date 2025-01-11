@@ -46,8 +46,11 @@ namespace ModularPropellers.Propellers
                     45f,
                     (b) => MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle),
                     (b, v) => b.GameLogic.GetAs<RotorLogic>().BladeAngle.Value = MathHelper.ToRadians(v),
-                    (b, sb) => sb.Append($"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N0} degrees")
-                );
+                    (b, sb) => sb.Append($"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1} degrees")
+                ).SetLimits(
+                    b => 0,
+                    b => MathHelper.ToDegrees(RotorLogic.RotorInfos[b.BlockDefinition.SubtypeName].MaxAngle)
+                    );
             }
             {
                 CreateSlider(
@@ -74,14 +77,14 @@ namespace ModularPropellers.Propellers
                     "Increase Blade Pitch",
                     b =>
                     {
-                        var logic = b.GameLogic.GetAs<RotorLogic>().BladeAngle;
-                        if (logic.Value + MathHelper.ToRadians(2.5f) <= Math.PI/4)
-                            logic.Value += MathHelper.ToRadians(2.5f);
+                        var logic = b.GameLogic.GetAs<RotorLogic>();
+                        if (logic.BladeAngle.Value + MathHelper.ToRadians(0.5f) <= logic.Info.MaxAngle)
+                            logic.BladeAngle.Value += MathHelper.ToRadians(0.5f);
                         else
-                            logic.Value = (float) Math.PI/4;
+                            logic.BladeAngle.Value = logic.Info.MaxAngle;
                     },
                     (b, sb) => sb.Append(
-                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N0} degrees"),
+                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1}\u00b0"),
                     @"Textures\GUI\Icons\Actions\Increase.dds"
                 );
             }
@@ -92,13 +95,13 @@ namespace ModularPropellers.Propellers
                     b => 
                     {
                         var logic = b.GameLogic.GetAs<RotorLogic>().BladeAngle;
-                        if (logic.Value - MathHelper.ToRadians(2.5f) >= 0)
-                            logic.Value -= MathHelper.ToRadians(2.5f);
+                        if (logic.Value - MathHelper.ToRadians(0.5f) >= 0)
+                            logic.Value -= MathHelper.ToRadians(0.5f);
                         else
                             logic.Value = 0;
                     },
                     (b, sb) => sb.Append(
-                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N0} degrees"),
+                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1}\u00b0"),
                     @"Textures\GUI\Icons\Actions\Decrease.dds"
                 );
             }
