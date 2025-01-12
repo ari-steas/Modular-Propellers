@@ -36,7 +36,7 @@ namespace ModularPropellers.Motors
                 foreach (var rotor in Rotors)
                     rotor.AvailablePower = 0;
 
-            MyAPIGateway.Utilities.ShowNotification($"{AvailablePower / 1000000:N1}/{totalDesiredPower / 1000000:N1} MW ({Blocks.Count} blocks)", 1000/60);
+            //MyAPIGateway.Utilities.ShowNotification($"{AvailablePower / 1000000:N1}/{totalDesiredPower / 1000000:N1} MW ({Blocks.Count} blocks)", 1000/60);
         }
 
         public void AddBlock(IMyCubeBlock block)

@@ -79,13 +79,9 @@ namespace ModularPropellers.Propellers
 
         public override void UpdateAfterSimulation()
         {
-            if (!_block.IsWorking)
-                return;
-
             MaxDesiredPower = CalculateMaxPower() * _block.CurrentThrustPercentage / 100d;
 
             //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
-            MyAPIGateway.Utilities.ShowNotification($"AP: {AvailablePower/1000000:F0}", 1000/60);
 
             //if (MyAPIGateway.Session.IsServer)
             //    RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
