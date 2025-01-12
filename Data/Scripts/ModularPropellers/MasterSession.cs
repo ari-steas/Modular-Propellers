@@ -1,6 +1,7 @@
 ﻿using ModularPropellers.Propellers;
 using Sandbox.Game.Entities;
 using System.Collections.Generic;
+using ModularPropellers.Motors;
 using Sandbox.ModAPI;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
@@ -9,7 +10,7 @@ using VRageMath;
 
 namespace ModularPropellers
 {
-    [MySessionComponentDescriptor(MyUpdateOrder.NoUpdate)]
+    [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
     internal class MasterSession : MySessionComponentBase
     {
         public static MasterSession I;
@@ -20,14 +21,21 @@ namespace ModularPropellers
         {
             I = this;
             RotorManager.Init();
+            MotorManager.Init();
             MyAPIGateway.Entities.OnEntityAdd += OnEntityAdd;
         }
 
         protected override void UnloadData()
         {
             MyAPIGateway.Entities.OnEntityAdd -= OnEntityAdd;
+            MotorManager.Close();
             RotorManager.Close();
             I = null;
+        }
+
+        public override void UpdateBeforeSimulation()
+        {
+            MotorManager.UpdateBeforeSimulation();
         }
 
         public float GetAtmosphereDensity(IMyCubeGrid grid)

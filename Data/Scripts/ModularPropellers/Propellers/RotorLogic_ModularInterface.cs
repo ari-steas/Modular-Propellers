@@ -7,14 +7,17 @@ using VRageMath;
 
 namespace ModularPropellers.Propellers
 {
-    internal partial class RotorLogic
+    public partial class RotorLogic
     {
         public void AddBlade(IMyCubeBlock blade)
         {
-            Matrix discard;
-            blade.Visible = false;
-            var animation = new AnimationBlade(blade.CalculateCurrentModel(out discard), Matrix.Identity, (MyEntity) _block);
-            _bladeParts.Add(blade, animation);
+            if (!_bladeParts.ContainsKey(blade))
+            {
+                Matrix discard;
+                blade.Visible = false;
+                var animation = new AnimationBlade(blade.CalculateCurrentModel(out discard), Matrix.Identity, (MyEntity) _block);
+                _bladeParts.Add(blade, animation);
+            }
 
             // Really inefficient way to get prop blades
             _bladeSets.Clear();
@@ -60,9 +63,9 @@ namespace ModularPropellers.Propellers
             _bladeParts.Remove(blade);
         }
 
-        public void InitialCheck(int assemblyId)
+        public void InitialCheck()
         {
-            foreach (var part in ModularDefinition.ModularApi.GetMemberParts(assemblyId).Where(part => !(part is IMyThrust)))
+            foreach (var part in ModularDefinition.ModularApi.GetMemberParts(AssemblyId).Where(part => !(part is IMyThrust)))
                 AddBlade(part);
         }
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<CubeBlocks>
+		<Definition>
+			<Id>
+				<TypeId>CubeBlock</TypeId>
+				<SubtypeId>LG_ModularMotorShaftT</SubtypeId>
+			</Id>
+			<DisplayName>{LOC:DisplayName_LG_ModularMotorShaftT}</DisplayName>
+			<Description>{LOC:Description_LG_ModularMotorShaftT}</Description>
+			<Icon>Textures\GUI\Icons\AstronautBackpack.dds</Icon>
+			<CubeSize>Large</CubeSize>
+			<BlockTopology>TriangleMesh</BlockTopology>
+			<Size x="1" y="1" z="1"/>
+			<ModelOffset x="0" y="0" z="0"/>
+			<Model>Models\LG_ModularMotorShaftT.mwm</Model>
+			<Components>
+				<Component Subtype="SteelPlate" Count="10"/>
+			</Components>
+			<CriticalComponent Subtype="SteelPlate" Index="0"/>
+			<BlockPairName>LG_ModularMotorShaftT</BlockPairName>
+		</Definition>
+	</CubeBlocks>
+</Definitions>

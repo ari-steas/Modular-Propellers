@@ -1,19 +1,14 @@
 ﻿using Sandbox.Game.Entities;
 using System;
 using System.Collections.Generic;
-using Sandbox.ModAPI;
-using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
-using VRage.Game.ModAPI.Network;
 using VRage.ModAPI;
-using VRage.Sync;
 using VRageMath;
-using VRage.Utils;
 
 namespace ModularPropellers.Propellers
 {
-    internal partial class RotorLogic
+    public partial class RotorLogic
     {
         private Dictionary<IMyCubeBlock, AnimationBlade> _bladeParts = new Dictionary<IMyCubeBlock, AnimationBlade>();
 
@@ -44,7 +39,7 @@ namespace ModularPropellers.Propellers
             }
             catch (Exception ex)
             {
-                // ignored
+                ModularDefinition.ModularApi.Log("[Handled]" + ex);
             }
         }
 

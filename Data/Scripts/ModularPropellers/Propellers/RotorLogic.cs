@@ -15,7 +15,7 @@ using VRageMath;
 namespace ModularPropellers.Propellers
 {
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Thrust), false, "ModularPropellerRotorLarge", "ModularPropellerRotorSmall")]
-    internal partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
+    public partial class RotorLogic : MyGameLogicComponent, IMyEventProxy
     {
         /// <summary>
         /// Lift and drag are multiplied by this number.
@@ -25,30 +25,30 @@ namespace ModularPropellers.Propellers
         /// Torque requirement is multiplied by this number.
         /// </summary>
         public const float TorqueModifier = 1 / 3f;
-
-
         public static readonly Dictionary<string, RotorInfo> RotorInfos = new Dictionary<string, RotorInfo>
         {
             ["ModularPropellerRotorLarge"] = new RotorInfo
             {
                 MaxRpm = 500,
                 MaxAngle = (float) MathHelper.ToRadians(15.5),
-                MaxTorque = float.MaxValue
             },
             ["ModularPropellerRotorSmall"] = new RotorInfo
             {
                 MaxRpm = 500,
                 MaxAngle = (float) MathHelper.ToRadians(15.5),
-                MaxTorque = float.MaxValue
             },
         };
 
+        public int AssemblyId = -1;
         private IMyThrust _block;
         private IMyCubeGrid _grid => _block.CubeGrid;
         public RotorInfo Info;
         private List<HashSet<IMyCubeBlock>> _bladeSets = new List<HashSet<IMyCubeBlock>>();
 
-        public bool IsValid = true;
+        private double _desiredPower = 0;
+        public double DesiredPower => _desiredPower * _block.CurrentThrustPercentage / 100d;
+
+        public double AvailablePower = 0;
 
         internal MySync<float, SyncDirection.BothWays> BladeAngle, MaxRpm;
         internal MySync<float, SyncDirection.FromServer> RPM;
@@ -79,10 +79,6 @@ namespace ModularPropellers.Propellers
 
         public override void UpdateAfterSimulation()
         {
-            if (!IsValid)
-                return;
-            double availablePower = 2.5 * 1000000 * _block.CurrentThrustPercentage;
-
             //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
             //if (MyAPIGateway.Session.IsServer)
@@ -99,8 +95,8 @@ namespace ModularPropellers.Propellers
             double torqueNeeded; // Newton-Meters
             // If the thrust multiplier hits zero, it sometimes breaks.
             _block.ThrustMultiplier = MathHelper.Clamp((float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded) / 100f, 1, float.MaxValue);
-            double powerNeeded = torqueNeeded * 2 * Math.PI * RPM / 60; // Watts
-            double netPower = availablePower - powerNeeded;
+            _desiredPower = torqueNeeded * 2 * Math.PI * RPM / 60; // Watts
+            double netPower = AvailablePower - _desiredPower;
 
             if (MyAPIGateway.Session.IsServer)
             {
@@ -116,7 +112,7 @@ namespace ModularPropellers.Propellers
                 return;
 
             MyAPIGateway.Utilities.ShowNotification($"RPM: {RPM.Value:N0}", 1000/60);
-            MyAPIGateway.Utilities.ShowNotification($"Power: {powerNeeded/1000000:F1}MW ({100*powerNeeded/availablePower:N0}%)", 1000/60);
+            MyAPIGateway.Utilities.ShowNotification($"Rotor Power: {_desiredPower/1000000:F1}MW ({100*_desiredPower/AvailablePower:N0}%)", 1000/60);
             //DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
         }
 
@@ -154,7 +150,7 @@ namespace ModularPropellers.Propellers
                 double dynamicPressure = 0.5 * speedSq * airDensity * propArea * LiftModifier;
 
                 totalForce += (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
-                torqueNeeded += dragCoefficient * dynamicPressure * propDistanceFromCenter * TorqueModifier; // Newtons * Meters
+                torqueNeeded += dragCoefficient * dynamicPressure * propDistanceFromCenter * TorqueModifier; // Newtons * Meters, represents drag force
 
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + dragNormal, Color.Red);
@@ -186,10 +182,6 @@ namespace ModularPropellers.Propellers
             /// Highest propeller angle for this rotor.
             /// </summary>
             public float MaxAngle;
-            /// <summary>
-            /// Highest safe torque for this rotor.
-            /// </summary>
-            public float MaxTorque;
         }
     }
 }

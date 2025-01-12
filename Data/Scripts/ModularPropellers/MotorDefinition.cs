@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ModularPropellers.Motors;
 using Sandbox.ModAPI;
 using VRageMath;
 using static ModularPropellers.Communication.DefinitionDefs;
@@ -26,29 +27,32 @@ namespace ModularPropellers
 
             OnInit = () =>
             {
-                MyAPIGateway.Utilities.ShowMessage("Modular Assemblies", "ExampleDefinition.OnInit called.");
+                
             },
 
             // Triggers whenever a new part is added to an assembly.
             OnPartAdd = (assemblyId, block, isBasePart) =>
             {
-                MyAPIGateway.Utilities.ShowMessage("Modular Assemblies", $"ExampleDefinition.OnPartAdd called.\nAssembly: {assemblyId}\nBlock: {block.DisplayNameText}\nIsBasePart: {isBasePart}");
-                MyAPIGateway.Utilities.ShowNotification("Assembly has " + ModularApi.GetMemberParts(assemblyId).Length + " blocks.");
+                if (!MotorManager.Logic.ContainsKey(assemblyId))
+                    MotorManager.Logic[assemblyId] = new MotorLogic(assemblyId);
+                MotorManager.Logic[assemblyId].AddBlock(block);
             },
 
             // Triggers whenever a part is removed from an assembly.
             OnPartRemove = (assemblyId, block, isBasePart) =>
             {
-                MyAPIGateway.Utilities.ShowMessage("Modular Assemblies", $"ExampleDefinition.OnPartRemove called.\nAssembly: {assemblyId}\nBlock: {block.DisplayNameText}\nIsBasePart: {isBasePart}");
-                MyAPIGateway.Utilities.ShowNotification("Assembly has " + ModularApi.GetMemberParts(assemblyId).Length + " blocks.");
+                MotorManager.Logic[assemblyId].RemoveBlock(block);
             },
 
             // Triggers whenever a part is destroyed, just after OnPartRemove.
             OnPartDestroy = (assemblyId, block, isBasePart) =>
             {
-                // You can remove this function, and any others if need be.
-                MyAPIGateway.Utilities.ShowMessage("Modular Assemblies", $"ExampleDefinition.OnPartDestroy called.\nI hope the explosion was pretty.");
-                MyAPIGateway.Utilities.ShowNotification("Assembly has " + ModularApi.GetMemberParts(assemblyId).Length + " blocks.");
+                
+            },
+
+            OnAssemblyClose = (assemblyId) =>
+            {
+                MotorManager.Logic.Remove(assemblyId);
             },
 
             // Optional - if this is set, an assembly will not be created until a baseblock exists.
@@ -58,8 +62,20 @@ namespace ModularPropellers
             // All SubtypeIds that can be part of this assembly.
             AllowedBlockSubtypes = new[]
             {
-                "LargeBlockBatteryBlock",
-                "LargeBlockSmallGenerator",
+                "ModularPropellerRotorLarge",
+                "ModularPropellerRotorSmall",
+
+                "LG_ModularMotorElectric",
+                "SG_ModularMotorElectric",
+
+                "LG_ModularMotorShaft",
+                "LG_ModularMotorShaftCorner",
+                "LG_ModularMotorShaftCross",
+                "LG_ModularMotorShaftT",
+                "SG_ModularMotorShaft",
+                "SG_ModularMotorShaftCorner",
+                "SG_ModularMotorShaftCross",
+                "SG_ModularMotorShaftT",
             },
 
             // Allowed connection directions & whitelists, measured in blocks.
@@ -67,12 +83,60 @@ namespace ModularPropellers
             // If the connection type whitelist is empty, all allowed subtypes may connect on that side.
             AllowedConnections = new Dictionary<string, Dictionary<Vector3I, string[]>>
             {
-                ["LargeBlockSmallGenerator"] = new Dictionary<Vector3I, string[]>
+                ["ModularPropellerRotorLarge"] = new Dictionary<Vector3I, string[]>
                 {
-                    // In this definition, a small reactor can only connect on faces with conveyors.
-                    [Vector3I.Up] = Array.Empty<string>(), // Build Info is really handy for checking directions.
+                    [Vector3I.Forward] = Array.Empty<string>(),
                     [Vector3I.Backward] = Array.Empty<string>(),
-                }
+                },
+                ["ModularPropellerRotorSmall"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                },
+
+                ["LG_ModularMotorElectric"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                },
+                ["SG_ModularMotorElectric"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                },
+
+                ["LG_ModularMotorShaft"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                },
+                ["LG_ModularMotorShaftCorner"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                    [Vector3I.Right] = Array.Empty<string>(),
+                },
+                ["SG_ModularMotorShaftCross"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                    [Vector3I.Right] = Array.Empty<string>(),
+                    [Vector3I.Left] = Array.Empty<string>(),
+                },
+                ["SG_ModularMotorShaft"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                },
+                ["SG_ModularMotorShaftCorner"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                    [Vector3I.Right] = Array.Empty<string>(),
+                },
+                ["SG_ModularMotorShaftCross"] = new Dictionary<Vector3I, string[]>
+                {
+                    [Vector3I.Forward] = Array.Empty<string>(),
+                    [Vector3I.Backward] = Array.Empty<string>(),
+                    [Vector3I.Right] = Array.Empty<string>(),
+                    [Vector3I.Left] = Array.Empty<string>(),
+                },
             },
         };
     }

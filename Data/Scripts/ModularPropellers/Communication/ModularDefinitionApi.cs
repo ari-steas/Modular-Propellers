@@ -19,7 +19,7 @@ namespace ModularPropellers.Communication
         /// <summary>
         ///     The expected API version. Don't touch this unless you're developing for the Modular Assemblies Framework.
         /// </summary>
-        public const int ApiVersion = 2;
+        public const int ApiVersion = 3;
 
         /// <summary>
         ///     Triggered whenever the API is ready - added to by the constructor or manually.
@@ -163,18 +163,18 @@ namespace ModularPropellers.Communication
         ///     Registers an Action<AssemblyId> triggered on assembly removal.
         /// </summary>
         /// <param name="action"></param>
-        public void AddOnAssemblyClose(Action<int> action)
+        public void RegisterOnAssemblyClose(string definitionName, Action<int> action)
         {
-            _addOnAssemblyClose?.Invoke(action);
+            _registerOnAssemblyClose?.Invoke(definitionName, action);
         }
 
         /// <summary>
         ///     De-registers an Action(AssemblyId) triggered on assembly removal.
         /// </summary>
         /// <param name="action"></param>
-        public void RemoveOnAssemblyClose(Action<int> action)
+        public void UnregisterOnAssemblyClose(string definitionName, Action<int> action)
         {
-            _removeOnAssemblyClose?.Invoke(action);
+            _unregisterOnAssemblyClose?.Invoke(definitionName, action);
         }
 
         /// <summary>
@@ -283,6 +283,7 @@ namespace ModularPropellers.Communication
                 RegisterOnPartAdd(definition.Name, definition.OnPartAdd);
                 RegisterOnPartRemove(definition.Name, definition.OnPartRemove);
                 RegisterOnPartDestroy(definition.Name, definition.OnPartDestroy);
+                RegisterOnAssemblyClose(definition.Name, definition.OnAssemblyClose);
 
                 if (validDefinitions.Contains(definition.Name))
                     definition.OnInit?.Invoke();
@@ -440,8 +441,8 @@ namespace ModularPropellers.Communication
         private Func<int, IMyCubeBlock[]> _getMemberParts;
         private Func<int, IMyCubeBlock> _getBasePart;
         private Func<int, IMyCubeGrid> _getAssemblyGrid;
-        private Action<Action<int>> _addOnAssemblyClose;
-        private Action<Action<int>> _removeOnAssemblyClose;
+        private Action<string, Action<int>> _registerOnAssemblyClose;
+        private Action<string, Action<int>> _unregisterOnAssemblyClose;
         private Action<int> _recreateAssembly;
         private Func<int, string, object> _getAssemblyProperty;
         private Action<int, string, object> _setAssemblyProperty;
@@ -498,8 +499,8 @@ namespace ModularPropellers.Communication
             SetApiMethod("GetMemberParts", ref _getMemberParts);
             SetApiMethod("GetBasePart", ref _getBasePart);
             SetApiMethod("GetAssemblyGrid", ref _getAssemblyGrid);
-            SetApiMethod("AddOnAssemblyClose", ref _addOnAssemblyClose);
-            SetApiMethod("RemoveOnAssemblyClose", ref _removeOnAssemblyClose);
+            SetApiMethod("RegisterOnAssemblyClose", ref _registerOnAssemblyClose);
+            SetApiMethod("UnregisterOnAssemblyClose", ref _unregisterOnAssemblyClose);
             SetApiMethod("RecreateAssembly", ref _recreateAssembly);
             SetApiMethod("GetAssemblyProperty", ref _getAssemblyProperty);
             SetApiMethod("SetAssemblyProperty", ref _setAssemblyProperty);
@@ -661,6 +662,14 @@ namespace ModularPropellers.Communication
             ///     </para>
             /// </summary>
             public Action<int, IMyCubeBlock, bool> OnPartDestroy { get; set; }
+
+            /// <summary>
+            ///     Called when an assembly is closed. Note - OnPartRemove will not be called.
+            ///     <para>
+            ///         Arg1 is PhysicalAssemblyId
+            ///     </para>
+            /// </summary>
+            public Action<int> OnAssemblyClose { get; set; }
 
             /// <summary>
             ///     All allowed SubtypeIds. The mod will likely misbehave if two mods allow the same blocks, so please be cautious.

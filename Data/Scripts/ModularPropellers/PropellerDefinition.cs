@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using ModularPropellers.Motors;
 using ModularPropellers.Propellers;
 using Sandbox.ModAPI;
 using VRageMath;
@@ -34,20 +36,13 @@ namespace ModularPropellers
             // Triggers whenever a new part is added to an assembly.
             OnPartAdd = (assemblyId, block, isBasePart) =>
             {
-                // Handling for duplicate rotors
+                // TODO: Handling for duplicate rotors
                 if (block is IMyThrust)
                 {
                     var logic = block.GameLogic.GetAs<RotorLogic>();
-                    if (RotorManager.RotorLogic.ContainsKey(assemblyId))
-                    {
-                        RotorManager.RotorLogic[assemblyId].IsValid = false;
-                        logic.IsValid = false;
-                    }
-                    else
-                    {
-                        RotorManager.RotorLogic[assemblyId] = logic;
-                        logic.InitialCheck(assemblyId);
-                    }
+                    RotorManager.RotorLogic[assemblyId] = logic;
+                    logic.AssemblyId = assemblyId;
+                    MyAPIGateway.Utilities.InvokeOnGameThread(logic.InitialCheck, StartAt: MyAPIGateway.Session.GameplayFrameCounter + 10);
                 }
                 else
                 {
@@ -61,14 +56,6 @@ namespace ModularPropellers
                 // Handling for duplicate rotors
                 if (block is IMyThrust)
                 {
-                    var remainingLogics = ModularApi.GetMemberParts(assemblyId).Where(part => part is IMyThrust).ToArray();
-                    if (remainingLogics.Length == 1)
-                    {
-                        var logic = remainingLogics[0].GameLogic.GetAs<RotorLogic>();
-                        logic.IsValid = true;
-                        logic.InitialCheck(assemblyId);
-                    }
-
                     block.GameLogic.GetAs<RotorLogic>().ClearParts();
                 }
                 else
@@ -82,6 +69,11 @@ namespace ModularPropellers
             OnPartDestroy = (assemblyId, block, isBasePart) =>
             {
                 
+            },
+
+            OnAssemblyClose = (assemblyId) =>
+            {
+                RotorManager.RotorLogic.Remove(assemblyId);
             },
 
             // Optional - if this is set, an assembly will not be created until a baseblock exists.
