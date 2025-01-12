@@ -10,36 +10,32 @@ namespace ModularPropellers.Propellers
 {
     public partial class RotorLogic
     {
-        private Dictionary<IMyCubeBlock, AnimationBlade> _bladeParts = new Dictionary<IMyCubeBlock, AnimationBlade>();
+        private readonly Dictionary<IMyCubeBlock, AnimationBlade> _bladeParts = new Dictionary<IMyCubeBlock, AnimationBlade>();
 
         private void InitialRotateBlades()
         {
-            try
-            {
-                var spacing = Math.PI * 2 / _bladeSets.Count;
-                float currentRotation = (float)spacing;
+            
+            
+            var spacing = Math.PI * 2 / _bladeSets.Count;
+            var currentRotation = (float)spacing;
 
-                foreach (var set in _bladeSets)
+            foreach (var set in _bladeSets)
+            {
+                var rotationMatrix = Matrix.CreateFromAxisAngle(Vector3.Forward, currentRotation);
+                foreach (var blade in set)
                 {
-                    Matrix rotationMatrix = Matrix.CreateFromAxisAngle(Vector3.Forward, currentRotation);
-                    Matrix m;
-                    foreach (var blade in set)
-                    {
-                        m = Matrix.CreateWorld(
+                    AnimationBlade part;
+                    if (!_bladeParts.TryGetValue(blade, out part))
+                        continue;
+                    var m = Matrix.CreateWorld(
                                 Vector3.Up * (((blade.Position - _block.Position) * _block.CubeGrid.GridSize).Length() -
                                               _block.CubeGrid.GridSize / 4), Vector3.Down, Vector3.Backward) *
                             rotationMatrix;
-                        var part = _bladeParts[blade];
-                        part.PositionComp.SetLocalMatrix(ref m);
-                        part.Update(0, 0);
-                    }
-
-                    currentRotation += (float)spacing;
+                    part.PositionComp.SetLocalMatrix(ref m);
+                    part.Update(0, 0);
                 }
-            }
-            catch (Exception ex)
-            {
-                ModularDefinition.ModularApi.Log("[Handled]" + ex);
+
+                currentRotation += (float)spacing;
             }
         }
 

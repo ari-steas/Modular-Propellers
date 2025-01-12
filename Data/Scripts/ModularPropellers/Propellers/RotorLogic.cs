@@ -46,7 +46,7 @@ namespace ModularPropellers.Propellers
         private List<HashSet<IMyCubeBlock>> _bladeSets = new List<HashSet<IMyCubeBlock>>();
 
         private double _desiredPower = 0;
-        public double DesiredPower => _desiredPower * _block.CurrentThrustPercentage / 100d;
+        public double MaxDesiredPower { get; private set; } = 0;
 
         public double AvailablePower = 0;
 
@@ -79,7 +79,13 @@ namespace ModularPropellers.Propellers
 
         public override void UpdateAfterSimulation()
         {
+            if (!_block.IsWorking)
+                return;
+
+            MaxDesiredPower = CalculateMaxPower() * _block.CurrentThrustPercentage / 100d;
+
             //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
+            MyAPIGateway.Utilities.ShowNotification($"AP: {AvailablePower/1000000:F0}", 1000/60);
 
             //if (MyAPIGateway.Session.IsServer)
             //    RPM.Value = MaxRpm * MathHelper.Lerp(RPM.Value/MaxRpm.Value, _block.CurrentThrustPercentage/100f, 0.02f);
@@ -116,7 +122,14 @@ namespace ModularPropellers.Propellers
             //DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + _block.WorldMatrix.Backward * _block.MaxEffectiveThrust / 10000, Color.Blue);
         }
 
-        internal double CalculateThrust(double rpm, double airDensity, out double torqueNeeded)
+        private double CalculateMaxPower()
+        {
+            double torqueNeeded;
+            CalculateThrust(MaxRpm, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded);
+            return torqueNeeded * 2 * Math.PI * MaxRpm / 60;
+        }
+
+        private double CalculateThrust(double rpm, double airDensity, out double torqueNeeded)
         {
             Vector3D totalForce = Vector3D.Zero;
             torqueNeeded = 0;

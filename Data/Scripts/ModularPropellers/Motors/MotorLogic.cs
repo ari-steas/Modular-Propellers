@@ -27,14 +27,14 @@ namespace ModularPropellers.Motors
 
         public void UpdateBeforeSimulation()
         {
-            double totalDesiredPower = Rotors.Sum(rotor => rotor.DesiredPower);
+            double totalDesiredPower = Rotors.Sum(rotor => rotor.MaxDesiredPower);
 
             if (totalDesiredPower > 0)
                 foreach (var rotor in Rotors)
-                    rotor.AvailablePower = AvailablePower * (rotor.DesiredPower / totalDesiredPower);
+                    rotor.AvailablePower = AvailablePower * (rotor.MaxDesiredPower / totalDesiredPower);
             else
                 foreach (var rotor in Rotors)
-                    rotor.AvailablePower = AvailablePower / Rotors.Count;
+                    rotor.AvailablePower = 0;
 
             MyAPIGateway.Utilities.ShowNotification($"{AvailablePower / 1000000:N1}/{totalDesiredPower / 1000000:N1} MW ({Blocks.Count} blocks)", 1000/60);
         }
