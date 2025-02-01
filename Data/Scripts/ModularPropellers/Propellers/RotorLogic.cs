@@ -29,12 +29,12 @@ namespace ModularPropellers.Propellers
         {
             ["ModularPropellerRotorLarge"] = new RotorInfo
             {
-                MaxRpm = 500,
+                MaxRpm = 5000,
                 MaxAngle = (float) MathHelper.ToRadians(15.5),
             },
             ["ModularPropellerRotorSmall"] = new RotorInfo
             {
-                MaxRpm = 500,
+                MaxRpm = 5000,
                 MaxAngle = (float) MathHelper.ToRadians(15.5),
             },
         };
@@ -50,7 +50,20 @@ namespace ModularPropellers.Propellers
 
         public double AvailablePower = 0;
 
-        internal MySync<float, SyncDirection.BothWays> BladeAngle, MaxRpm;
+        public float MaxRpm
+        {
+            get
+            {
+                return AbsMaxRpm * MaxRpmPercent;
+            }
+            set
+            {
+                MaxRpmPercent.Value = MathHelper.Clamp(value / AbsMaxRpm, 0, 1);
+            }
+        }
+
+        public float AbsMaxRpm = 0;
+        internal MySync<float, SyncDirection.BothWays> BladeAngle, MaxRpmPercent;
         internal MySync<float, SyncDirection.FromServer> RPM;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -71,7 +84,7 @@ namespace ModularPropellers.Propellers
 
             BladeAngle.Value = Info.MaxAngle;
             RPM.Value = 0f;
-            MaxRpm.Value = Info.MaxRpm;
+            MaxRpmPercent.Value = 1;
 
             RotorControls.DoOnce();
             NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
@@ -79,7 +92,8 @@ namespace ModularPropellers.Propellers
 
         public override void UpdateAfterSimulation()
         {
-            MaxDesiredPower = CalculateMaxPower() * _block.CurrentThrustPercentage / 100d;
+            MaxDesiredPower = _block.IsWorking ? CalculateMaxPower() : 0;
+            AbsMaxRpm = RotorInfos[_block.BlockDefinition.SubtypeName].MaxRpm / _bladeParts.Count * 2.875f;
 
             //MyAPIGateway.Utilities.ShowNotification("Parts: " + _bladeParts.Count + " Sets: " + _bladeSets.Count, 1000/60);
 
@@ -96,7 +110,8 @@ namespace ModularPropellers.Propellers
 
             double torqueNeeded; // Newton-Meters
             // If the thrust multiplier hits zero, it sometimes breaks.
-            _block.ThrustMultiplier = MathHelper.Clamp((float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded) / 100f, 1, float.MaxValue);
+            ApplyThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), true, out torqueNeeded);
+            //_block.ThrustMultiplier = MathHelper.Clamp((float) CalculateThrust(RPM, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded) / 100f, 1, float.MaxValue);
             _desiredPower = torqueNeeded * 2 * Math.PI * RPM / 60; // Watts
             double netPower = AvailablePower - _desiredPower;
 
@@ -105,8 +120,8 @@ namespace ModularPropellers.Propellers
                 var newRpm = RPM.Value + (float) ((60 * netPower) / (torqueNeeded * 2 * Math.PI)) / 60f;
                 if (newRpm < 0 || float.IsNaN(newRpm))
                     newRpm = 0;
-                if (newRpm > MaxRpm.Value)
-                    newRpm = MaxRpm.Value;
+                if (newRpm > MaxRpm)
+                    newRpm = MaxRpm;
                 RPM.Value = newRpm;
             }
 
@@ -121,15 +136,16 @@ namespace ModularPropellers.Propellers
         private double CalculateMaxPower()
         {
             double torqueNeeded;
-            CalculateThrust(MaxRpm, MasterSession.I.GetAtmosphereDensity(_grid), out torqueNeeded);
+            ApplyThrust(MaxRpm, MasterSession.I.GetAtmosphereDensity(_grid), false, out torqueNeeded);
             return torqueNeeded * 2 * Math.PI * MaxRpm / 60;
         }
 
-        private double CalculateThrust(double rpm, double airDensity, out double torqueNeeded)
+        private void ApplyThrust(double rpm, double airDensity, bool applyImpulse, out double torqueNeeded)
         {
             Vector3D totalForce = Vector3D.Zero;
             torqueNeeded = 0;
             float propArea = _block.CubeGrid.GridSize * _block.CubeGrid.GridSize;
+            
             foreach (var part in _bladeParts.Values)
             {
                 double propDistanceFromCenter =
@@ -158,16 +174,35 @@ namespace ModularPropellers.Propellers
 
                 double dynamicPressure = 0.5 * speedSq * airDensity * propArea * LiftModifier;
 
-                totalForce += (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
+                var bladeForce = (liftNormal * liftCoefficient + dragNormal * dragCoefficient) * dynamicPressure;
+                totalForce += bladeForce;
                 torqueNeeded += dragCoefficient * dynamicPressure * propDistanceFromCenter * TorqueModifier; // Newtons * Meters, represents drag force
 
-                //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
+                if (applyImpulse && bladeForce.LengthSquared() > 1)
+                    _block.CubeGrid.Physics.ApplyImpulse(bladeForce / 60, part.PositionComp.GetPosition());
+
+                //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + force / 10000, Color.Green);
                 //DebugDraw.I.DrawLine0(part.PositionComp.GetPosition(), part.PositionComp.GetPosition() + dragNormal, Color.Red);
             }
 
-            // We only care about the force that's aligned to the thruster direction.
-            totalForce = WorldToLocalRotation(totalForce, _block.WorldMatrix);
-            return totalForce.Z < 0 ? 0 : totalForce.Z;
+            if (!applyImpulse)
+                return;
+
+            if (ModularDefinition.ModularApi.IsDebug())
+            {
+                // We only care about the force that's aligned to the thruster direction for debug output.
+                //totalForce = WorldToLocalRotation(totalForce, _block.WorldMatrix);
+                //totalForce.X = 0; // Ignoring horizontal components to make it easier for players to use
+                //totalForce.Y = 0;
+                //totalForce = LocalToWorldRotation(totalForce, _block.WorldMatrix);
+                DebugDraw.I.DrawLine0(_block.PositionComp.GetPosition(), _block.PositionComp.GetPosition() + totalForce / 10000, Color.Green);
+            }
+            
+
+            //
+            //if (totalForce.LengthSquared() > 1)
+            //    _block.CubeGrid.Physics.ApplyImpulse(totalForce / 60, _block.PositionComp.GetPosition());
+            //MyAPIGateway.Utilities.ShowNotification(totalForce.Length()/1000 + " kN", 1000/60);
         }
 
         Vector3D WorldToLocalRotation(Vector3D pos, MatrixD parentMatrix)

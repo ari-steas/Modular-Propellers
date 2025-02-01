@@ -48,7 +48,7 @@ namespace ModularPropellers.Propellers
                     (b, v) => b.GameLogic.GetAs<RotorLogic>().BladeAngle.Value = MathHelper.ToRadians(v),
                     (b, sb) => sb.Append($"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1} degrees")
                 ).SetLimits(
-                    b => 0,
+                    b => -MathHelper.ToDegrees(RotorLogic.RotorInfos[b.BlockDefinition.SubtypeName].MaxAngle),
                     b => MathHelper.ToDegrees(RotorLogic.RotorInfos[b.BlockDefinition.SubtypeName].MaxAngle)
                     );
             }
@@ -59,12 +59,12 @@ namespace ModularPropellers.Propellers
                     "Highest speed at which this rotor can spin.",
                     0,
                     float.MaxValue,
-                    (b) => b.GameLogic.GetAs<RotorLogic>().MaxRpm.Value,
-                    (b, v) => b.GameLogic.GetAs<RotorLogic>().MaxRpm.Value = v,
-                    (b, sb) => sb.Append($"{b.GameLogic.GetAs<RotorLogic>().MaxRpm.Value:N0} RPM")
+                    (b) => b.GameLogic.GetAs<RotorLogic>().MaxRpm,
+                    (b, v) => b.GameLogic.GetAs<RotorLogic>().MaxRpm = v,
+                    (b, sb) => sb.Append($"{b.GameLogic.GetAs<RotorLogic>().MaxRpm:N0} RPM")
                 ).SetLimits(
                     b => 0,
-                    b => RotorLogic.RotorInfos[b.BlockDefinition.SubtypeName].MaxRpm
+                    b => b.GameLogic.GetAs<RotorLogic>().AbsMaxRpm
                     );
             }
         }
@@ -94,11 +94,11 @@ namespace ModularPropellers.Propellers
                     "Decrease Blade Pitch",
                     b => 
                     {
-                        var logic = b.GameLogic.GetAs<RotorLogic>().BladeAngle;
-                        if (logic.Value - MathHelper.ToRadians(0.5f) >= 0)
-                            logic.Value -= MathHelper.ToRadians(0.5f);
+                        var logic = b.GameLogic.GetAs<RotorLogic>();
+                        if (logic.BladeAngle.Value - MathHelper.ToRadians(0.5f) >= -logic.Info.MaxAngle)
+                            logic.BladeAngle.Value -= MathHelper.ToRadians(0.5f);
                         else
-                            logic.Value = 0;
+                            logic.BladeAngle.Value = -logic.Info.MaxAngle;
                     },
                     (b, sb) => sb.Append(
                         $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1}\u00b0"),

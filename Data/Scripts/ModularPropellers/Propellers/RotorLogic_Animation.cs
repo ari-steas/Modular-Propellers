@@ -31,6 +31,8 @@ namespace ModularPropellers.Propellers
                                 Vector3.Up * (((blade.Position - _block.Position) * _block.CubeGrid.GridSize).Length() -
                                               _block.CubeGrid.GridSize / 4), Vector3.Down, Vector3.Backward) *
                             rotationMatrix;
+                    part.Render.EnableColorMaskHsv = true;
+                    part.Render.ColorMaskHsv = blade.Render.ColorMaskHsv;
                     part.PositionComp.SetLocalMatrix(ref m);
                     part.Update(0, 0);
                 }
