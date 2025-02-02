@@ -101,7 +101,41 @@ namespace ModularPropellers.Propellers
                             logic.BladeAngle.Value = -logic.Info.MaxAngle;
                     },
                     (b, sb) => sb.Append(
-                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N1}\u00b0"),
+                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N0}\u00b0"),
+                    @"Textures\GUI\Icons\Actions\Decrease.dds"
+                );
+            }
+            {
+                CreateAction(
+                    "RPMLimit_Inc",
+                    "Increase RPM Limiter",
+                    b =>
+                    {
+                        var logic = b.GameLogic.GetAs<RotorLogic>();
+                        if (logic.MaxRpmPercent.Value + 0.1f <= 1)
+                            logic.MaxRpmPercent.Value += 0.1f;
+                        else
+                            logic.MaxRpmPercent.Value = 1;
+                    },
+                    (b, sb) => sb.Append(
+                        $"{b.GameLogic.GetAs<RotorLogic>().MaxRpm} RPM"),
+                    @"Textures\GUI\Icons\Actions\Increase.dds"
+                );
+            }
+            {
+                CreateAction(
+                    "RPMLimit_Dec",
+                    "Decrease RPM Limiter",
+                    b => 
+                    {
+                        var logic = b.GameLogic.GetAs<RotorLogic>();
+                        if (logic.MaxRpmPercent.Value - 0.1f >= 0)
+                            logic.MaxRpmPercent.Value -= 0.1f;
+                        else
+                            logic.MaxRpmPercent.Value = 0;
+                    },
+                    (b, sb) => sb.Append(
+                        $"{MathHelper.ToDegrees(b.GameLogic.GetAs<RotorLogic>().BladeAngle):N0} RPM"),
                     @"Textures\GUI\Icons\Actions\Decrease.dds"
                 );
             }

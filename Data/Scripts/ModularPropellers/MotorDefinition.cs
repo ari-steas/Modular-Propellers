@@ -34,7 +34,7 @@ namespace ModularPropellers
             OnPartAdd = (assemblyId, block, isBasePart) =>
             {
                 if (!MotorManager.Logic.ContainsKey(assemblyId))
-                    MotorManager.Logic[assemblyId] = new MotorLogic(assemblyId);
+                    MotorManager.Logic[assemblyId] = new MotorAssemblyLogic(assemblyId);
                 MotorManager.Logic[assemblyId].AddBlock(block);
             },
 

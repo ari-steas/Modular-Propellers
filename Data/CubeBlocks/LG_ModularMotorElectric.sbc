@@ -3,7 +3,7 @@
 	<CubeBlocks>
 		<Definition>
 			<Id>
-				<TypeId>CubeBlock</TypeId>
+				<TypeId>TerminalBlock</TypeId>
 				<SubtypeId>LG_ModularMotorElectric</SubtypeId>
 			</Id>
 			<DisplayName>{LOC:DisplayName_LG_ModularMotorElectric}</DisplayName>
